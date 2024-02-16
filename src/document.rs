@@ -68,16 +68,16 @@ pub enum NodeData {
 }
 
 /// An element of a sequence node.
-pub type NodeItem = i32;
+pub type NodeItem = u32;
 
 /// An element of a mapping node.
 #[derive(Copy, Clone, Default, Debug)]
 #[non_exhaustive]
 pub struct NodePair {
     /// The key of the element.
-    pub key: i32,
+    pub key: u32,
     /// The value of the element.
-    pub value: i32,
+    pub value: u32,
 }
 
 impl Document {
@@ -209,7 +209,7 @@ impl Document {
     }
 
     /// Add an item to a SEQUENCE node.
-    pub fn append_sequence_item(&mut self, sequence: i32, item: i32) {
+    pub fn append_sequence_item(&mut self, sequence: i32, item: u32) {
         assert!(sequence > 0 && sequence as usize - 1 < self.nodes.len());
         assert!(matches!(
             &self.nodes[sequence as usize - 1].data,
@@ -224,7 +224,7 @@ impl Document {
     }
 
     /// Add a pair of a key and a value to a MAPPING node.
-    pub fn yaml_document_append_mapping_pair(&mut self, mapping: i32, key: i32, value: i32) {
+    pub fn yaml_document_append_mapping_pair(&mut self, mapping: i32, key: u32, value: u32) {
         assert!(mapping > 0 && mapping as usize - 1 < self.nodes.len());
         assert!(matches!(
             &self.nodes[mapping as usize - 1].data,
@@ -314,7 +314,7 @@ impl Document {
         }
     }
 
-    fn load_nodes(&mut self, parser: &mut Parser, ctx: &mut Vec<i32>) -> Result<()> {
+    fn load_nodes(&mut self, parser: &mut Parser, ctx: &mut Vec<u32>) -> Result<()> {
         let end_implicit;
         let end_mark;
 
@@ -357,7 +357,7 @@ impl Document {
     fn register_anchor(
         &mut self,
         parser: &mut Parser,
-        index: i32,
+        index: u32,
         anchor: Option<String>,
     ) -> Result<()> {
         let Some(anchor) = anchor else {
@@ -382,7 +382,7 @@ impl Document {
         Ok(())
     }
 
-    fn load_node_add(&mut self, ctx: &[i32], index: i32) -> Result<()> {
+    fn load_node_add(&mut self, ctx: &[u32], index: u32) -> Result<()> {
         let Some(parent_index) = ctx.last() else {
             return Ok(());
         };
@@ -410,7 +410,7 @@ impl Document {
         Ok(())
     }
 
-    fn load_alias(&mut self, parser: &mut Parser, event: Event, ctx: &[i32]) -> Result<()> {
+    fn load_alias(&mut self, parser: &mut Parser, event: Event, ctx: &[u32]) -> Result<()> {
         let EventData::Alias { anchor } = &event.data else {
             unreachable!()
         };
@@ -429,7 +429,7 @@ impl Document {
         ))
     }
 
-    fn load_scalar(&mut self, parser: &mut Parser, event: Event, ctx: &[i32]) -> Result<()> {
+    fn load_scalar(&mut self, parser: &mut Parser, event: Event, ctx: &[u32]) -> Result<()> {
         let EventData::Scalar {
             mut tag,
             value,
@@ -451,7 +451,7 @@ impl Document {
             end_mark: event.end_mark,
         };
         self.nodes.push(node);
-        let index: i32 = self.nodes.len() as i32;
+        let index: u32 = self.nodes.len() as u32;
         self.register_anchor(parser, index, anchor)?;
         self.load_node_add(ctx, index)
     }
@@ -460,7 +460,7 @@ impl Document {
         &mut self,
         parser: &mut Parser,
         event: Event,
-        ctx: &mut Vec<i32>,
+        ctx: &mut Vec<u32>,
     ) -> Result<()> {
         let EventData::SequenceStart {
             anchor,
@@ -489,14 +489,14 @@ impl Document {
         };
 
         self.nodes.push(node);
-        let index: i32 = self.nodes.len() as i32;
+        let index: u32 = self.nodes.len() as u32;
         self.register_anchor(parser, index, anchor)?;
         self.load_node_add(ctx, index)?;
         ctx.push(index);
         Ok(())
     }
 
-    fn load_sequence_end(&mut self, event: Event, ctx: &mut Vec<i32>) -> Result<()> {
+    fn load_sequence_end(&mut self, event: Event, ctx: &mut Vec<u32>) -> Result<()> {
         let Some(index) = ctx.last().copied() else {
             panic!("sequence_end without a current sequence")
         };
@@ -513,7 +513,7 @@ impl Document {
         &mut self,
         parser: &mut Parser,
         event: Event,
-        ctx: &mut Vec<i32>,
+        ctx: &mut Vec<u32>,
     ) -> Result<()> {
         let EventData::MappingStart {
             anchor,
@@ -540,14 +540,14 @@ impl Document {
             end_mark: event.end_mark,
         };
         self.nodes.push(node);
-        let index: i32 = self.nodes.len() as i32;
+        let index: u32 = self.nodes.len() as u32;
         self.register_anchor(parser, index, anchor)?;
         self.load_node_add(ctx, index)?;
         ctx.push(index);
         Ok(())
     }
 
-    fn load_mapping_end(&mut self, event: Event, ctx: &mut Vec<i32>) -> Result<()> {
+    fn load_mapping_end(&mut self, event: Event, ctx: &mut Vec<u32>) -> Result<()> {
         let Some(index) = ctx.last().copied() else {
             panic!("mapping_end without a current mapping")
         };
@@ -619,10 +619,10 @@ impl Document {
         }
     }
 
-    fn dump_node(&mut self, emitter: &mut Emitter, index: i32) -> Result<()> {
+    fn dump_node(&mut self, emitter: &mut Emitter, index: u32) -> Result<()> {
         assert!(index > 0);
         let node = &mut self.nodes[index as usize - 1];
-        let anchor_id: i32 = emitter.anchors[index as usize - 1].anchor;
+        let anchor_id: u32 = emitter.anchors[index as usize - 1].anchor;
         let mut anchor: Option<String> = None;
         if anchor_id != 0 {
             anchor = Some(Emitter::generate_anchor(anchor_id));

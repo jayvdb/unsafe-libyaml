@@ -104,7 +104,7 @@ pub struct AliasData {
     /// The anchor.
     pub anchor: String,
     /// The node id.
-    pub index: i32,
+    pub index: u32,
     /// The anchor mark.
     pub mark: Mark,
 }

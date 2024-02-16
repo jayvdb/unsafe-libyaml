@@ -52,7 +52,7 @@ pub struct Emitter<'w> {
     /// The current indentation level.
     pub(crate) indent: i32,
     /// The current flow level.
-    pub(crate) flow_level: i32,
+    pub(crate) flow_level: u32,
     /// Is it the document root context?
     pub(crate) root_context: bool,
     /// Is it a sequence context?
@@ -62,7 +62,7 @@ pub struct Emitter<'w> {
     /// Is it a simple mapping key context?
     pub(crate) simple_key_context: bool,
     /// The current line.
-    pub(crate) line: i32,
+    pub(crate) line: u32,
     /// The current column.
     pub(crate) column: i32,
     /// If the last character was a whitespace?
@@ -70,7 +70,7 @@ pub struct Emitter<'w> {
     /// If the last character was an indentation character (' ', '-', '?', ':')?
     pub(crate) indention: bool,
     /// If an explicit document end is required?
-    pub(crate) open_ended: i32,
+    pub(crate) open_ended: OpenEnded,
     /// If the stream was already opened?
     pub(crate) opened: bool,
     /// If the stream was already closed?
@@ -79,13 +79,22 @@ pub struct Emitter<'w> {
     // Note: Same length as `document.nodes`.
     pub(crate) anchors: Vec<Anchors>,
     /// The last assigned anchor id.
-    pub(crate) last_anchor_id: i32,
+    pub(crate) last_anchor_id: u32,
 }
 
 impl<'a> Default for Emitter<'a> {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// The open ended states.
+#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub(crate) enum OpenEnded {
+    #[default]
+    No,
+    Yes,
+    Other,
 }
 
 /// The emitter states.
@@ -134,9 +143,9 @@ pub enum EmitterState {
 #[derive(Copy, Clone, Default)]
 pub(crate) struct Anchors {
     /// The number of references.
-    pub references: i32,
+    pub references: u32,
     /// The anchor id.
-    pub anchor: i32,
+    pub anchor: u32,
     /// If the node has been emitted?
     pub serialized: bool,
 }
@@ -203,7 +212,7 @@ impl<'w> Emitter<'w> {
             column: 0,
             whitespace: false,
             indention: false,
-            open_ended: 0,
+            open_ended: OpenEnded::No,
             opened: false,
             closed: false,
             anchors: Vec::new(),
@@ -493,7 +502,7 @@ impl<'w> Emitter<'w> {
     }
 
     fn emit_stream_start(&mut self, event: &Event) -> Result<()> {
-        self.open_ended = 0;
+        self.open_ended = OpenEnded::No;
         if let EventData::StreamStart { ref encoding } = event.data {
             if self.encoding == Encoding::Any {
                 self.encoding = *encoding;
@@ -559,11 +568,13 @@ impl<'w> Emitter<'w> {
             if !first || self.canonical {
                 implicit = false;
             }
-            if (version_directive.is_some() || !tag_directives.is_empty()) && self.open_ended != 0 {
+            if (version_directive.is_some() || !tag_directives.is_empty())
+                && self.open_ended != OpenEnded::No
+            {
                 self.write_indicator("...", true, false, false)?;
                 self.write_indent()?;
             }
-            self.open_ended = 0;
+            self.open_ended = OpenEnded::No;
             if let Some(version_directive) = version_directive {
                 implicit = false;
                 self.write_indicator("%YAML", true, false, false)?;
@@ -594,12 +605,12 @@ impl<'w> Emitter<'w> {
                 }
             }
             self.state = EmitterState::DocumentContent;
-            self.open_ended = 0;
+            self.open_ended = OpenEnded::No;
             return Ok(());
         } else if let EventData::StreamEnd = &event.data {
-            if self.open_ended == 2 {
+            if self.open_ended == OpenEnded::Other {
                 self.write_indicator("...", true, false, false)?;
-                self.open_ended = 0;
+                self.open_ended = OpenEnded::No;
                 self.write_indent()?;
             }
             self.flush()?;
@@ -621,10 +632,10 @@ impl<'w> Emitter<'w> {
             self.write_indent()?;
             if !implicit {
                 self.write_indicator("...", true, false, false)?;
-                self.open_ended = 0;
+                self.open_ended = OpenEnded::No;
                 self.write_indent()?;
-            } else if self.open_ended == 0 {
-                self.open_ended = 1;
+            } else if self.open_ended == OpenEnded::No {
+                self.open_ended = OpenEnded::Yes;
             }
             self.flush()?;
             self.state = EmitterState::DocumentStart;
@@ -1675,7 +1686,7 @@ impl<'w> Emitter<'w> {
             let indent_hint = indent_hint.encode_utf8(&mut indent_hint_buffer);
             self.write_indicator(indent_hint, false, false, false)?;
         }
-        self.open_ended = 0;
+        self.open_ended = OpenEnded::No;
 
         if string.is_empty() {
             chomp_hint = Some("-");
@@ -1688,7 +1699,7 @@ impl<'w> Emitter<'w> {
                 chomp_hint = Some("-");
             } else if is_breakz(next) {
                 chomp_hint = Some("+");
-                self.open_ended = 2;
+                self.open_ended = OpenEnded::Other;
             }
         }
 
@@ -1819,7 +1830,7 @@ impl<'w> Emitter<'w> {
         self.last_anchor_id = 0;
     }
 
-    pub(crate) fn anchor_node_sub(&mut self, index: i32) {
+    pub(crate) fn anchor_node_sub(&mut self, index: u32) {
         self.anchors[index as usize - 1].references += 1;
         if self.anchors[index as usize - 1].references == 2 {
             self.last_anchor_id += 1;
@@ -1827,7 +1838,7 @@ impl<'w> Emitter<'w> {
         }
     }
 
-    pub(crate) fn generate_anchor(anchor_id: i32) -> String {
+    pub(crate) fn generate_anchor(anchor_id: u32) -> String {
         alloc::format!("id{anchor_id:03}")
     }
 }
