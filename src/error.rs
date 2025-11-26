@@ -14,7 +14,7 @@ pub struct Mark {
 
 impl std::fmt::Display for Mark {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "line {} column {}", self.line, self.column)
+        write!(f, "line {} column {}", self.line + 1, self.column + 1)
     }
 }
 
