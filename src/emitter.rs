@@ -80,7 +80,7 @@ pub struct Emitter<'w> {
     pub(crate) last_anchor_id: i32,
 }
 
-impl<'a> Default for Emitter<'a> {
+impl Default for Emitter<'_> {
     fn default() -> Self {
         Self::new()
     }
@@ -342,7 +342,7 @@ impl<'w> Emitter<'w> {
             self.buffer.push('\n');
         } else if self.line_break == Break::CrLn {
             self.buffer.push_str("\r\n");
-        };
+        }
         self.column = 0;
         self.line += 1;
         Ok(())
@@ -854,7 +854,7 @@ impl<'w> Emitter<'w> {
             self.state = EmitterState::FlowSequenceFirstItem;
         } else {
             self.state = EmitterState::BlockSequenceFirstItem;
-        };
+        }
         Ok(())
     }
 

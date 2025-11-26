@@ -20,7 +20,7 @@ pub struct Parser<'r> {
     pub(crate) aliases: Vec<AliasData>,
 }
 
-impl<'r> Default for Parser<'r> {
+impl Default for Parser<'_> {
     fn default() -> Self {
         Self::new()
     }
@@ -106,7 +106,7 @@ pub struct AliasData {
     pub mark: Mark,
 }
 
-impl<'r> Iterator for Parser<'r> {
+impl Iterator for Parser<'_> {
     type Item = Result<Event>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -118,7 +118,7 @@ impl<'r> Iterator for Parser<'r> {
     }
 }
 
-impl<'r> core::iter::FusedIterator for Parser<'r> {}
+impl core::iter::FusedIterator for Parser<'_> {}
 
 impl<'r> Parser<'r> {
     /// Create a parser.
@@ -461,7 +461,7 @@ impl<'r> Parser<'r> {
             };
             self.state = self.states.pop().unwrap();
             self.scanner.skip_token();
-            return Ok(event);
+            Ok(event)
         } else if let TokenData::FlowSequenceStart = &token.data {
             end_mark = token.end_mark;
             self.state = ParserState::FlowSequenceFirstEntry;
@@ -475,7 +475,7 @@ impl<'r> Parser<'r> {
                 start_mark,
                 end_mark,
             };
-            return Ok(event);
+            Ok(event)
         } else if let TokenData::FlowMappingStart = &token.data {
             end_mark = token.end_mark;
             self.state = ParserState::FlowMappingFirstKey;
@@ -489,7 +489,7 @@ impl<'r> Parser<'r> {
                 start_mark,
                 end_mark,
             };
-            return Ok(event);
+            Ok(event)
         } else if block && matches!(token.data, TokenData::BlockSequenceStart) {
             end_mark = token.end_mark;
             self.state = ParserState::BlockSequenceFirstEntry;
@@ -503,7 +503,7 @@ impl<'r> Parser<'r> {
                 start_mark,
                 end_mark,
             };
-            return Ok(event);
+            Ok(event)
         } else if block && matches!(token.data, TokenData::BlockMappingStart) {
             end_mark = token.end_mark;
             self.state = ParserState::BlockMappingFirstKey;
@@ -517,7 +517,7 @@ impl<'r> Parser<'r> {
                 start_mark,
                 end_mark,
             };
-            return Ok(event);
+            Ok(event)
         } else if anchor.is_some() || tag.is_some() {
             self.state = self.states.pop().unwrap();
             let event = Event {
@@ -532,9 +532,9 @@ impl<'r> Parser<'r> {
                 start_mark,
                 end_mark,
             };
-            return Ok(event);
+            Ok(event)
         } else {
-            return Err(Error::parser(
+            Err(Error::parser(
                 if block {
                     "while parsing a block node"
                 } else {
@@ -543,7 +543,7 @@ impl<'r> Parser<'r> {
                 start_mark,
                 "did not find expected node content",
                 token.start_mark,
-            ));
+            ))
         }
     }
 
@@ -581,12 +581,12 @@ impl<'r> Parser<'r> {
         } else {
             let token_mark = token.start_mark;
             let mark = self.marks.pop().unwrap();
-            return Err(Error::parser(
+            Err(Error::parser(
                 "while parsing a block collection",
                 mark,
                 "did not find expected '-' indicator",
                 token_mark,
-            ));
+            ))
         }
     }
 

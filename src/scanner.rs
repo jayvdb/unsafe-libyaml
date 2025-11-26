@@ -1824,13 +1824,13 @@ impl<'r> Scanner<'r> {
     }
 }
 
-impl<'r> Default for Scanner<'r> {
+impl Default for Scanner<'_> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'r> Iterator for Scanner<'r> {
+impl Iterator for Scanner<'_> {
     type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1842,4 +1842,4 @@ impl<'r> Iterator for Scanner<'r> {
     }
 }
 
-impl<'r> core::iter::FusedIterator for Scanner<'r> {}
+impl core::iter::FusedIterator for Scanner<'_> {}

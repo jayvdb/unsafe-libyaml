@@ -16,13 +16,13 @@ pub struct Event {
 
 #[derive(Debug, PartialEq)]
 pub enum EventData {
-    /// The stream parameters (for YAML_STREAM_START_EVENT).
+    /// The stream parameters (for `YAML_STREAM_START_EVENT`).
     StreamStart {
         /// The document encoding.
         encoding: Encoding,
     },
     StreamEnd,
-    /// The document parameters (for YAML_DOCUMENT_START_EVENT).
+    /// The document parameters (for `YAML_DOCUMENT_START_EVENT`).
     DocumentStart {
         /// The version directive.
         version_directive: Option<VersionDirective>,
@@ -31,16 +31,16 @@ pub enum EventData {
         /// Is the document indicator implicit?
         implicit: bool,
     },
-    /// The document end parameters (for YAML_DOCUMENT_END_EVENT).
+    /// The document end parameters (for `YAML_DOCUMENT_END_EVENT`).
     DocumentEnd {
         implicit: bool,
     },
-    /// The alias parameters (for YAML_ALIAS_EVENT).
+    /// The alias parameters (for `YAML_ALIAS_EVENT`).
     Alias {
         /// The anchor.
         anchor: String,
     },
-    /// The scalar parameters (for YAML_SCALAR_EVENT).
+    /// The scalar parameters (for `YAML_SCALAR_EVENT`).
     Scalar {
         /// The anchor.
         anchor: Option<String>,
@@ -55,7 +55,7 @@ pub enum EventData {
         /// The scalar style.
         style: ScalarStyle,
     },
-    /// The sequence parameters (for YAML_SEQUENCE_START_EVENT).
+    /// The sequence parameters (for `YAML_SEQUENCE_START_EVENT`).
     SequenceStart {
         /// The anchor.
         anchor: Option<String>,
@@ -67,7 +67,7 @@ pub enum EventData {
         style: SequenceStyle,
     },
     SequenceEnd,
-    /// The mapping parameters (for YAML_MAPPING_START_EVENT).
+    /// The mapping parameters (for `YAML_MAPPING_START_EVENT`).
     MappingStart {
         /// The anchor.
         anchor: Option<String>,
