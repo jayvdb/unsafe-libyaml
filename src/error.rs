@@ -129,7 +129,7 @@ impl Error {
     pub fn problem_mark(&self) -> Option<Mark> {
         match &*self.0 {
             ErrorImpl::Reader { .. } | ErrorImpl::Emitter(_) | ErrorImpl::Io(_) => None,
-            ErrorImpl::Scanner(ref p) | ErrorImpl::Parser(ref p) | ErrorImpl::Composer(ref p) => {
+            ErrorImpl::Scanner(p) | ErrorImpl::Parser(p) | ErrorImpl::Composer(p) => {
                 Some(p.problem_mark)
             }
         }
@@ -138,7 +138,7 @@ impl Error {
     pub fn context_mark(&self) -> Option<Mark> {
         match &*self.0 {
             ErrorImpl::Reader { .. } | ErrorImpl::Emitter(..) | ErrorImpl::Io(_) => None,
-            ErrorImpl::Scanner(ref p) | ErrorImpl::Parser(ref p) | ErrorImpl::Composer(ref p) => {
+            ErrorImpl::Scanner(p) | ErrorImpl::Parser(p) | ErrorImpl::Composer(p) => {
                 if p.context.is_empty() {
                     None
                 } else {
@@ -151,9 +151,7 @@ impl Error {
     pub fn problem(&self) -> &'static str {
         match &*self.0 {
             ErrorImpl::Reader { problem, .. } | ErrorImpl::Emitter(problem) => problem,
-            ErrorImpl::Scanner(ref p) | ErrorImpl::Parser(ref p) | ErrorImpl::Composer(ref p) => {
-                p.problem
-            }
+            ErrorImpl::Scanner(p) | ErrorImpl::Parser(p) | ErrorImpl::Composer(p) => p.problem,
             ErrorImpl::Io(_) => "I/O error",
         }
     }
@@ -161,7 +159,7 @@ impl Error {
     pub fn context(&self) -> Option<&'static str> {
         match &*self.0 {
             ErrorImpl::Reader { .. } | ErrorImpl::Emitter(..) | ErrorImpl::Io(_) => None,
-            ErrorImpl::Scanner(ref p) | ErrorImpl::Parser(ref p) | ErrorImpl::Composer(ref p) => {
+            ErrorImpl::Scanner(p) | ErrorImpl::Parser(p) | ErrorImpl::Composer(p) => {
                 if p.context.is_empty() {
                     None
                 } else {
@@ -174,7 +172,7 @@ impl Error {
 
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        if let ErrorImpl::Io(ref err) = &*self.0 {
+        if let ErrorImpl::Io(err) = &*self.0 {
             Some(err)
         } else {
             None

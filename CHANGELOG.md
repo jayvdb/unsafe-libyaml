@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Breaking changes
+- Migrated to Rust Edition 2024 (MSRV 1.85).
+
 ## 0.2.0 - 2025-11-26
 
 ### Bugfixes

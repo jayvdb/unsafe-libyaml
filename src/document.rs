@@ -1,7 +1,7 @@
 use crate::{
-    AliasData, Anchors, Emitter, Error, Event, EventData, MappingStyle, Mark, Parser, Result,
-    ScalarStyle, SequenceStyle, TagDirective, VersionDirective, DEFAULT_MAPPING_TAG,
-    DEFAULT_SCALAR_TAG, DEFAULT_SEQUENCE_TAG,
+    AliasData, Anchors, DEFAULT_MAPPING_TAG, DEFAULT_SCALAR_TAG, DEFAULT_SEQUENCE_TAG, Emitter,
+    Error, Event, EventData, MappingStyle, Mark, Parser, Result, ScalarStyle, SequenceStyle,
+    TagDirective, VersionDirective,
 };
 
 /// The document structure.
@@ -216,9 +216,7 @@ impl Document {
             NodeData::Sequence { .. }
         ));
         assert!(item > 0 && item as usize - 1 < self.nodes.len());
-        if let NodeData::Sequence { ref mut items, .. } =
-            &mut self.nodes[sequence as usize - 1].data
-        {
+        if let NodeData::Sequence { items, .. } = &mut self.nodes[sequence as usize - 1].data {
             items.push(item);
         }
     }
@@ -233,8 +231,7 @@ impl Document {
         assert!(key > 0 && key as usize - 1 < self.nodes.len());
         assert!(value > 0 && value as usize - 1 < self.nodes.len());
         let pair = NodePair { key, value };
-        if let NodeData::Mapping { ref mut pairs, .. } = &mut self.nodes[mapping as usize - 1].data
-        {
+        if let NodeData::Mapping { pairs, .. } = &mut self.nodes[mapping as usize - 1].data {
             pairs.push(pair);
         }
     }

@@ -36,11 +36,11 @@ pub(crate) fn test_main(
     let mut line_buffer = String::with_capacity(1024);
     let mut value_buffer = String::with_capacity(128);
 
-    let result = loop {
+    loop {
         line_buffer.clear();
         let n = buf.read_line(&mut line_buffer)?;
         if n == 0 {
-            break Ok(());
+            return Ok(());
         }
         let line = line_buffer.strip_suffix('\n').unwrap_or(&line_buffer);
 
@@ -87,15 +87,13 @@ pub(crate) fn test_main(
         } else if line.starts_with("=ALI") {
             Event::alias(get_anchor('*', line).expect("no alias name"))
         } else {
-            break Err(format!("Unknown event: '{line}'").into());
+            return Err(format!("Unknown event: '{line}'").into());
         };
 
         if let Err(err) = emitter.emit(event) {
-            break Err(err.into());
+            return Err(err.into());
         }
-    };
-
-    result
+    }
 }
 
 fn get_anchor(sigil: char, line: &str) -> Option<&str> {
