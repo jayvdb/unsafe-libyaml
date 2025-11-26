@@ -59,7 +59,7 @@ fn read_utf8_buffered(
         match reader.fill_buf() {
             Ok([]) => return Ok(false),
             Ok(available) => break available,
-            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => (),
             Err(err) => return Err(err.into()),
         }
     };
@@ -152,7 +152,7 @@ fn read_utf16_buffered<const BIG_ENDIAN: bool>(
         match reader.fill_buf() {
             Ok([]) => return Ok(false),
             Ok(available) => break available,
-            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => (),
             Err(err) => return Err(err.into()),
         }
     };

@@ -798,7 +798,7 @@ impl<'w> Emitter<'w> {
         self.simple_key_context = simple_key;
 
         match event.data {
-            EventData::Alias { .. } => self.emit_alias(event, &analysis.anchor),
+            EventData::Alias { .. } => self.emit_alias(event, analysis.anchor.as_ref()),
             EventData::Scalar { .. } => self.emit_scalar(event, analysis),
             EventData::SequenceStart { .. } => self.emit_sequence_start(event, analysis),
             EventData::MappingStart { .. } => self.emit_mapping_start(event, analysis),
@@ -808,7 +808,7 @@ impl<'w> Emitter<'w> {
         }
     }
 
-    fn emit_alias(&mut self, _event: &Event, analysis: &Option<AnchorAnalysis>) -> Result<()> {
+    fn emit_alias(&mut self, _event: &Event, analysis: Option<&AnchorAnalysis>) -> Result<()> {
         self.process_anchor(analysis)?;
         if self.simple_key_context {
             self.put(' ')?;
@@ -828,8 +828,8 @@ impl<'w> Emitter<'w> {
         };
 
         self.select_scalar_style(event, scalar, tag)?;
-        self.process_anchor(anchor)?;
-        self.process_tag(tag)?;
+        self.process_anchor(anchor.as_ref())?;
+        self.process_tag(tag.as_ref())?;
         self.increase_indent(true, false);
         self.process_scalar(scalar)?;
         self.indent = self.indents.pop().unwrap();
@@ -839,8 +839,8 @@ impl<'w> Emitter<'w> {
 
     fn emit_sequence_start(&mut self, event: &Event, analysis: &Analysis) -> Result<()> {
         let Analysis { anchor, tag, .. } = analysis;
-        self.process_anchor(anchor)?;
-        self.process_tag(tag)?;
+        self.process_anchor(anchor.as_ref())?;
+        self.process_tag(tag.as_ref())?;
 
         let EventData::SequenceStart { style, .. } = &event.data else {
             unreachable!()
@@ -860,8 +860,8 @@ impl<'w> Emitter<'w> {
 
     fn emit_mapping_start(&mut self, event: &Event, analysis: &Analysis) -> Result<()> {
         let Analysis { anchor, tag, .. } = analysis;
-        self.process_anchor(anchor)?;
-        self.process_tag(tag)?;
+        self.process_anchor(anchor.as_ref())?;
+        self.process_tag(tag.as_ref())?;
 
         let EventData::MappingStart { style, .. } = &event.data else {
             unreachable!()
@@ -1009,7 +1009,7 @@ impl<'w> Emitter<'w> {
         Ok(())
     }
 
-    fn process_anchor(&mut self, analysis: &Option<AnchorAnalysis>) -> Result<()> {
+    fn process_anchor(&mut self, analysis: Option<&AnchorAnalysis>) -> Result<()> {
         let Some(analysis) = analysis.as_ref() else {
             return Ok(());
         };
@@ -1017,8 +1017,8 @@ impl<'w> Emitter<'w> {
         self.write_anchor(analysis.anchor)
     }
 
-    fn process_tag(&mut self, analysis: &Option<TagAnalysis>) -> Result<()> {
-        let Some(analysis) = analysis.as_ref() else {
+    fn process_tag(&mut self, analysis: Option<&TagAnalysis>) -> Result<()> {
+        let Some(analysis) = analysis else {
             return Ok(());
         };
 
@@ -1332,16 +1332,8 @@ impl<'w> Emitter<'w> {
                 tag,
                 implicit,
                 ..
-            } => {
-                if let Some(anchor) = anchor {
-                    analysis.anchor = Some(Self::analyze_anchor(anchor, false)?);
-                }
-                if tag.is_some() && (self.canonical || !*implicit) {
-                    analysis.tag =
-                        Some(Self::analyze_tag(tag.as_deref().unwrap(), tag_directives)?);
-                }
             }
-            EventData::MappingStart {
+            | EventData::MappingStart {
                 anchor,
                 tag,
                 implicit,
