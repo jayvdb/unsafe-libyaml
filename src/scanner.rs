@@ -15,6 +15,8 @@ const MAX_NUMBER_LENGTH: u64 = 9_u64;
 pub struct Scanner<'r> {
     /// Read handler.
     pub(crate) read_handler: Option<&'r mut dyn std::io::BufRead>,
+    /// Owned input buffer (used when owned data is provided)
+    pub(crate) owned_input: Option<std::io::Cursor<Vec<u8>>>,
     /// EOF flag
     pub(crate) eof: bool,
     /// The working buffer.
@@ -53,6 +55,7 @@ impl<'r> Scanner<'r> {
     pub fn new() -> Scanner<'r> {
         Self {
             read_handler: None,
+            owned_input: None,
             eof: false,
             buffer: VecDeque::with_capacity(INPUT_BUFFER_SIZE),
             encoding: Encoding::Any,
@@ -73,14 +76,31 @@ impl<'r> Scanner<'r> {
 
     /// Set a string input.
     pub fn set_input_string(&mut self, input: &'r mut &[u8]) {
-        assert!((self.read_handler).is_none());
+        assert!((self.read_handler).is_none() && self.owned_input.is_none());
         self.read_handler = Some(input);
     }
 
     /// Set a generic input handler.
     pub fn set_input(&mut self, input: &'r mut dyn std::io::BufRead) {
-        assert!((self.read_handler).is_none());
+        assert!((self.read_handler).is_none() && self.owned_input.is_none());
         self.read_handler = Some(input);
+    }
+
+    /// Set an owned byte buffer as input.
+    ///
+    /// This method takes ownership of the input data, eliminating the need
+    /// for the caller to maintain the buffer with a specific lifetime.
+    pub fn set_input_owned(&mut self, input: Vec<u8>) {
+        assert!((self.read_handler).is_none() && self.owned_input.is_none());
+        self.owned_input = Some(std::io::Cursor::new(input));
+    }
+
+    /// Set an owned string as input.
+    ///
+    /// This method takes ownership of the input string, eliminating the need
+    /// for the caller to maintain the string with a specific lifetime.
+    pub fn set_input_string_owned(&mut self, input: String) {
+        self.set_input_owned(input.into_bytes());
     }
 
     /// Set the source encoding.

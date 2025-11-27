@@ -1,7 +1,7 @@
 use crate::{
-    AliasData, Anchors, DEFAULT_MAPPING_TAG, DEFAULT_SCALAR_TAG, DEFAULT_SEQUENCE_TAG, Emitter,
-    Error, Event, EventData, MappingStyle, Mark, Parser, Result, ScalarStyle, SequenceStyle,
-    TagDirective, VersionDirective,
+    AliasData, Anchors, Emitter, Error, Event, EventData, MappingStyle, Mark, Parser, Result,
+    ScalarStyle, SequenceStyle, TagDirective, VersionDirective, DEFAULT_MAPPING_TAG,
+    DEFAULT_SCALAR_TAG, DEFAULT_SEQUENCE_TAG,
 };
 
 /// The document structure.
@@ -464,10 +464,7 @@ impl Document {
     ) -> Result<()> {
         let (anchor, mut tag, style) = match event.data {
             EventData::SequenceStart {
-                anchor,
-                tag,
-                style,
-                ..
+                anchor, tag, style, ..
             } => (anchor, tag, style),
             _ => unreachable!(),
         };
@@ -518,10 +515,7 @@ impl Document {
     ) -> Result<()> {
         let (anchor, mut tag, style) = match event.data {
             EventData::MappingStart {
-                anchor,
-                tag,
-                style,
-                ..
+                anchor, tag, style, ..
             } => (anchor, tag, style),
             _ => unreachable!(),
         };

@@ -287,7 +287,12 @@ fn push_char(out: &mut VecDeque<char>, ch: char, offset: usize) -> Result<()> {
 }
 
 pub(crate) fn yaml_parser_update_buffer(parser: &mut Scanner, length: usize) -> Result<()> {
-    let reader = parser.read_handler.as_deref_mut().expect("no read handler");
+    let reader: &mut dyn BufRead = if let Some(ref mut owned) = parser.owned_input {
+        owned
+    } else {
+        parser.read_handler.as_deref_mut().expect("no read handler")
+    };
+
     if parser.buffer.len() >= length {
         return Ok(());
     }

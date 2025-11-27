@@ -148,6 +148,42 @@ impl<'r> Parser<'r> {
         self.scanner.set_input(input);
     }
 
+    /// Set an owned byte buffer as input.
+    ///
+    /// This method takes ownership of the input data, eliminating the need
+    /// for the caller to maintain the buffer with a specific lifetime.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use libyaml_safer::Parser;
+    ///
+    /// let mut parser = Parser::new();
+    /// let yaml_data = b"key: value".to_vec();
+    /// parser.set_input_owned(yaml_data);
+    /// ```
+    pub fn set_input_owned(&mut self, input: Vec<u8>) {
+        self.scanner.set_input_owned(input);
+    }
+
+    /// Set an owned string as input.
+    ///
+    /// This method takes ownership of the input string, eliminating the need
+    /// for the caller to maintain the string with a specific lifetime.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use libyaml_safer::Parser;
+    ///
+    /// let mut parser = Parser::new();
+    /// let yaml_string = String::from("key: value");
+    /// parser.set_input_string_owned(yaml_string);
+    /// ```
+    pub fn set_input_string_owned(&mut self, input: String) {
+        self.scanner.set_input_string_owned(input);
+    }
+
     /// Set the source encoding.
     pub fn set_encoding(&mut self, encoding: Encoding) {
         self.scanner.set_encoding(encoding);
