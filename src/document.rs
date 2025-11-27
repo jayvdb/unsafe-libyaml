@@ -1,7 +1,7 @@
 use crate::{
-    AliasData, Anchors, DEFAULT_MAPPING_TAG, DEFAULT_SCALAR_TAG, DEFAULT_SEQUENCE_TAG, Emitter,
-    Error, Event, EventData, MappingStyle, Mark, Parser, Result, ScalarStyle, SequenceStyle,
-    TagDirective, VersionDirective,
+    AliasData, Anchors, Emitter, Error, Event, EventData, MappingStyle, Mark, Parser, Result,
+    ScalarStyle, SequenceStyle, TagDirective, VersionDirective, DEFAULT_MAPPING_TAG,
+    DEFAULT_SCALAR_TAG, DEFAULT_SEQUENCE_TAG,
 };
 
 /// The document structure.
@@ -459,14 +459,11 @@ impl Document {
         event: Event,
         ctx: &mut Vec<i32>,
     ) -> Result<()> {
-        let EventData::SequenceStart {
-            anchor,
-            mut tag,
-            style,
-            ..
-        } = event.data
-        else {
-            unreachable!()
+        let (anchor, mut tag, style) = match event.data {
+            EventData::SequenceStart {
+                anchor, tag, style, ..
+            } => (anchor, tag, style),
+            _ => unreachable!(),
         };
 
         let mut items = Vec::with_capacity(16);
@@ -512,14 +509,11 @@ impl Document {
         event: Event,
         ctx: &mut Vec<i32>,
     ) -> Result<()> {
-        let EventData::MappingStart {
-            anchor,
-            mut tag,
-            style,
-            ..
-        } = event.data
-        else {
-            unreachable!()
+        let (anchor, mut tag, style) = match event.data {
+            EventData::MappingStart {
+                anchor, tag, style, ..
+            } => (anchor, tag, style),
+            _ => unreachable!(),
         };
 
         let mut pairs = Vec::with_capacity(16);
