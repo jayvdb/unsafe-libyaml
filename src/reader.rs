@@ -2,7 +2,7 @@ use std::io::BufRead;
 
 use alloc::collections::VecDeque;
 
-use crate::{scanner::Scanner, Encoding, Error, Result};
+use crate::{Encoding, Error, Result, scanner::Scanner};
 
 const BOM_UTF8: [u8; 3] = [0xef, 0xbb, 0xbf];
 const BOM_UTF16LE: [u8; 2] = [0xff, 0xfe];
@@ -282,8 +282,11 @@ fn push_char(out: &mut VecDeque<char>, ch: char, offset: usize) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn yaml_parser_update_buffer(parser: &mut Scanner, length: usize) -> Result<()> {
-    let reader = parser.read_handler.as_deref_mut().expect("no read handler");
+pub(crate) fn yaml_parser_update_buffer<R: BufRead>(
+    parser: &mut Scanner<R>,
+    length: usize,
+) -> Result<()> {
+    let reader = parser.read_handler.as_mut().expect("no read handler");
     if parser.buffer.len() >= length {
         return Ok(());
     }
