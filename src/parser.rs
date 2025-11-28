@@ -1,3 +1,5 @@
+use std::io::BufRead;
+
 use crate::scanner::Scanner;
 use crate::{
     Encoding, Error, Event, EventData, MappingStyle, Mark, Result, ScalarStyle, SequenceStyle,
@@ -6,8 +8,14 @@ use crate::{
 
 /// The parser structure.
 #[non_exhaustive]
-pub struct Parser<'r> {
-    pub(crate) scanner: Scanner<'r>,
+pub struct Parser<R> {
+    pub(crate) scanner: Scanner<R>,
+    pub(crate) inner: ParserInner,
+}
+
+/// The non-generic parts of `Parser`.
+#[derive(Default)]
+pub(crate) struct ParserInner {
     /// The parser states stack.
     pub(crate) states: Vec<ParserState>,
     /// The current parser state.
@@ -20,7 +28,7 @@ pub struct Parser<'r> {
     pub(crate) aliases: Vec<AliasData>,
 }
 
-impl Default for Parser<'_> {
+impl<R> Default for Parser<R> {
     fn default() -> Self {
         Self::new()
     }
@@ -106,11 +114,11 @@ pub struct AliasData {
     pub mark: Mark,
 }
 
-impl Iterator for Parser<'_> {
+impl<R: BufRead> Iterator for Parser<R> {
     type Item = Result<Event>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.scanner.stream_end_produced || self.state == ParserState::End {
+        if self.scanner.stream_end_produced || self.inner.state == ParserState::End {
             None
         } else {
             Some(self.parse())
@@ -118,33 +126,46 @@ impl Iterator for Parser<'_> {
     }
 }
 
-impl core::iter::FusedIterator for Parser<'_> {}
+impl<R: BufRead> core::iter::FusedIterator for Parser<R> {}
 
-impl<'r> Parser<'r> {
+impl<R> Parser<R> {
     /// Create a parser.
-    pub fn new() -> Parser<'r> {
+    pub fn new() -> Parser<R> {
         Parser {
             scanner: Scanner::new(),
-            states: Vec::with_capacity(16),
-            state: ParserState::default(),
-            marks: Vec::with_capacity(16),
-            tag_directives: Vec::with_capacity(16),
-            aliases: Vec::new(),
+            inner: ParserInner {
+                states: Vec::with_capacity(16),
+                state: ParserState::default(),
+                marks: Vec::with_capacity(16),
+                tag_directives: Vec::with_capacity(16),
+                aliases: Vec::new(),
+            },
         }
     }
 
     /// Reset the parser state.
     pub fn reset(&mut self) {
-        *self = Self::new();
-    }
+        self.scanner.reset();
 
+        // Preserve allocations.
+        self.inner.states.clear();
+        self.inner.state = ParserState::default();
+        self.inner.marks.clear();
+        self.inner.tag_directives.clear();
+        self.inner.aliases.clear();
+    }
+}
+
+impl<'r, 'b> Parser<&'b mut &'r [u8]> {
     /// Set a string input.
-    pub fn set_input_string(&mut self, input: &'r mut &[u8]) {
+    pub fn set_input_string(&mut self, input: &'r mut &'b [u8]) {
         self.scanner.set_input_string(input);
     }
+}
 
+impl<R: BufRead> Parser<R> {
     /// Set a generic input handler.
-    pub fn set_input(&mut self, input: &'r mut dyn std::io::BufRead) {
+    pub fn set_input(&mut self, input: R) {
         self.scanner.set_input(input);
     }
 
@@ -165,14 +186,14 @@ impl<'r> Parser<'r> {
     /// the calls of [`Document::load()`](crate::Document::load). Doing this
     /// will break the parser.
     pub fn parse(&mut self) -> Result<Event> {
-        if self.scanner.stream_end_produced || self.state == ParserState::End {
+        if self.scanner.stream_end_produced || self.inner.state == ParserState::End {
             return Ok(Event::stream_end());
         }
         self.state_machine()
     }
 
     fn state_machine(&mut self) -> Result<Event> {
-        match self.state {
+        match self.inner.state {
             ParserState::StreamStart => self.parse_stream_start(),
             ParserState::ImplicitDocumentStart => self.parse_document_start(true),
             ParserState::DocumentStart => self.parse_document_start(false),
@@ -217,7 +238,7 @@ impl<'r> Parser<'r> {
                 start_mark: token.start_mark,
                 end_mark: token.end_mark,
             };
-            self.state = ParserState::ImplicitDocumentStart;
+            self.inner.state = ParserState::ImplicitDocumentStart;
             self.scanner.skip_token();
             Ok(event)
         } else {
@@ -261,8 +282,8 @@ impl<'r> Parser<'r> {
                 end_mark: token.end_mark,
             };
             self.process_directives(None, None)?;
-            self.states.push(ParserState::DocumentEnd);
-            self.state = ParserState::BlockNode;
+            self.inner.states.push(ParserState::DocumentEnd);
+            self.inner.state = ParserState::BlockNode;
             Ok(event)
         } else if !matches!(token.data, TokenData::StreamEnd) {
             let end_mark: Mark;
@@ -280,8 +301,8 @@ impl<'r> Parser<'r> {
                     start_mark,
                     end_mark,
                 };
-                self.states.push(ParserState::DocumentEnd);
-                self.state = ParserState::DocumentContent;
+                self.inner.states.push(ParserState::DocumentEnd);
+                self.inner.state = ParserState::DocumentContent;
                 self.scanner.skip_token();
                 Ok(event)
             } else {
@@ -298,7 +319,7 @@ impl<'r> Parser<'r> {
                 start_mark: token.start_mark,
                 end_mark: token.end_mark,
             };
-            self.state = ParserState::End;
+            self.inner.state = ParserState::End;
             self.scanner.skip_token();
             Ok(event)
         }
@@ -313,7 +334,7 @@ impl<'r> Parser<'r> {
         | TokenData::StreamEnd = &token.data
         {
             let mark = token.start_mark;
-            self.state = self.states.pop().unwrap();
+            self.inner.state = self.inner.states.pop().unwrap();
             Self::process_empty_scalar(mark)
         } else {
             self.parse_node(true, false)
@@ -331,8 +352,8 @@ impl<'r> Parser<'r> {
             self.scanner.skip_token();
             implicit = false;
         }
-        self.tag_directives.clear();
-        self.state = ParserState::DocumentStart;
+        self.inner.tag_directives.clear();
+        self.inner.state = ParserState::DocumentStart;
         Ok(Event {
             data: EventData::DocumentEnd { implicit },
             start_mark,
@@ -363,7 +384,7 @@ impl<'r> Parser<'r> {
                 start_mark: token.start_mark,
                 end_mark: token.end_mark,
             };
-            self.state = self.states.pop().unwrap();
+            self.inner.state = self.inner.states.pop().unwrap();
             self.scanner.skip_token();
             return Ok(event);
         }
@@ -402,7 +423,7 @@ impl<'r> Parser<'r> {
             if tag_handle_value.is_empty() {
                 tag = tag_suffix;
             } else {
-                for tag_directive in &self.tag_directives {
+                for tag_directive in &self.inner.tag_directives {
                     if tag_directive.handle == *tag_handle_value {
                         let suffix = tag_suffix.as_deref().unwrap_or("");
                         tag = Some(alloc::format!("{}{}", tag_directive.prefix, suffix));
@@ -426,7 +447,7 @@ impl<'r> Parser<'r> {
 
         if indentless_sequence && matches!(token.data, TokenData::BlockEntry) {
             end_mark = token.end_mark;
-            self.state = ParserState::IndentlessSequenceEntry;
+            self.inner.state = ParserState::IndentlessSequenceEntry;
             let event = Event {
                 data: EventData::SequenceStart {
                     anchor,
@@ -459,12 +480,12 @@ impl<'r> Parser<'r> {
                 start_mark,
                 end_mark,
             };
-            self.state = self.states.pop().unwrap();
+            self.inner.state = self.inner.states.pop().unwrap();
             self.scanner.skip_token();
             Ok(event)
         } else if let TokenData::FlowSequenceStart = &token.data {
             end_mark = token.end_mark;
-            self.state = ParserState::FlowSequenceFirstEntry;
+            self.inner.state = ParserState::FlowSequenceFirstEntry;
             let event = Event {
                 data: EventData::SequenceStart {
                     anchor,
@@ -478,7 +499,7 @@ impl<'r> Parser<'r> {
             Ok(event)
         } else if let TokenData::FlowMappingStart = &token.data {
             end_mark = token.end_mark;
-            self.state = ParserState::FlowMappingFirstKey;
+            self.inner.state = ParserState::FlowMappingFirstKey;
             let event = Event {
                 data: EventData::MappingStart {
                     anchor,
@@ -492,7 +513,7 @@ impl<'r> Parser<'r> {
             Ok(event)
         } else if block && matches!(token.data, TokenData::BlockSequenceStart) {
             end_mark = token.end_mark;
-            self.state = ParserState::BlockSequenceFirstEntry;
+            self.inner.state = ParserState::BlockSequenceFirstEntry;
             let event = Event {
                 data: EventData::SequenceStart {
                     anchor,
@@ -506,7 +527,7 @@ impl<'r> Parser<'r> {
             Ok(event)
         } else if block && matches!(token.data, TokenData::BlockMappingStart) {
             end_mark = token.end_mark;
-            self.state = ParserState::BlockMappingFirstKey;
+            self.inner.state = ParserState::BlockMappingFirstKey;
             let event = Event {
                 data: EventData::MappingStart {
                     anchor,
@@ -519,7 +540,7 @@ impl<'r> Parser<'r> {
             };
             Ok(event)
         } else if anchor.is_some() || tag.is_some() {
-            self.state = self.states.pop().unwrap();
+            self.inner.state = self.inner.states.pop().unwrap();
             let event = Event {
                 data: EventData::Scalar {
                     anchor,
@@ -551,7 +572,7 @@ impl<'r> Parser<'r> {
         if first {
             let token = self.scanner.peek()?;
             let mark = token.start_mark;
-            self.marks.push(mark);
+            self.inner.marks.push(mark);
             self.scanner.skip_token();
         }
 
@@ -562,10 +583,10 @@ impl<'r> Parser<'r> {
             self.scanner.skip_token();
             token = self.scanner.peek()?;
             if matches!(token.data, TokenData::BlockEntry | TokenData::BlockEnd) {
-                self.state = ParserState::BlockSequenceEntry;
+                self.inner.state = ParserState::BlockSequenceEntry;
                 Self::process_empty_scalar(mark)
             } else {
-                self.states.push(ParserState::BlockSequenceEntry);
+                self.inner.states.push(ParserState::BlockSequenceEntry);
                 self.parse_node(true, false)
             }
         } else if let TokenData::BlockEnd = token.data {
@@ -574,13 +595,13 @@ impl<'r> Parser<'r> {
                 start_mark: token.start_mark,
                 end_mark: token.end_mark,
             };
-            self.state = self.states.pop().unwrap();
-            let _ = self.marks.pop();
+            self.inner.state = self.inner.states.pop().unwrap();
+            let _ = self.inner.marks.pop();
             self.scanner.skip_token();
             Ok(event)
         } else {
             let token_mark = token.start_mark;
-            let mark = self.marks.pop().unwrap();
+            let mark = self.inner.marks.pop().unwrap();
             Err(Error::parser(
                 "while parsing a block collection",
                 mark,
@@ -601,10 +622,10 @@ impl<'r> Parser<'r> {
                 token.data,
                 TokenData::BlockEntry | TokenData::Key | TokenData::Value | TokenData::BlockEnd
             ) {
-                self.state = ParserState::IndentlessSequenceEntry;
+                self.inner.state = ParserState::IndentlessSequenceEntry;
                 Self::process_empty_scalar(mark)
             } else {
-                self.states.push(ParserState::IndentlessSequenceEntry);
+                self.inner.states.push(ParserState::IndentlessSequenceEntry);
                 self.parse_node(true, false)
             }
         } else {
@@ -613,7 +634,7 @@ impl<'r> Parser<'r> {
                 start_mark: token.start_mark,
                 end_mark: token.end_mark,
             };
-            self.state = self.states.pop().unwrap();
+            self.inner.state = self.inner.states.pop().unwrap();
             Ok(event)
         }
     }
@@ -622,7 +643,7 @@ impl<'r> Parser<'r> {
         if first {
             let token = self.scanner.peek()?;
             let mark = token.start_mark;
-            self.marks.push(mark);
+            self.inner.marks.push(mark);
             self.scanner.skip_token();
         }
 
@@ -635,10 +656,10 @@ impl<'r> Parser<'r> {
                 token.data,
                 TokenData::Key | TokenData::Value | TokenData::BlockEnd
             ) {
-                self.state = ParserState::BlockMappingValue;
+                self.inner.state = ParserState::BlockMappingValue;
                 Self::process_empty_scalar(mark)
             } else {
-                self.states.push(ParserState::BlockMappingValue);
+                self.inner.states.push(ParserState::BlockMappingValue);
                 self.parse_node(true, true)
             }
         } else if let TokenData::BlockEnd = token.data {
@@ -647,13 +668,13 @@ impl<'r> Parser<'r> {
                 start_mark: token.start_mark,
                 end_mark: token.end_mark,
             };
-            self.state = self.states.pop().unwrap();
-            _ = self.marks.pop();
+            self.inner.state = self.inner.states.pop().unwrap();
+            _ = self.inner.marks.pop();
             self.scanner.skip_token();
             Ok(event)
         } else {
             let token_mark = token.start_mark;
-            let mark = self.marks.pop().unwrap();
+            let mark = self.inner.marks.pop().unwrap();
             Err(Error::parser(
                 "while parsing a block mapping",
                 mark,
@@ -673,15 +694,15 @@ impl<'r> Parser<'r> {
                 token.data,
                 TokenData::Key | TokenData::Value | TokenData::BlockEnd
             ) {
-                self.state = ParserState::BlockMappingKey;
+                self.inner.state = ParserState::BlockMappingKey;
                 Self::process_empty_scalar(mark)
             } else {
-                self.states.push(ParserState::BlockMappingKey);
+                self.inner.states.push(ParserState::BlockMappingKey);
                 self.parse_node(true, true)
             }
         } else {
             let mark = token.start_mark;
-            self.state = ParserState::BlockMappingKey;
+            self.inner.state = ParserState::BlockMappingKey;
             Self::process_empty_scalar(mark)
         }
     }
@@ -690,7 +711,7 @@ impl<'r> Parser<'r> {
         if first {
             let token = self.scanner.peek()?;
             let mark = token.start_mark;
-            self.marks.push(mark);
+            self.inner.marks.push(mark);
             self.scanner.skip_token();
         }
 
@@ -702,7 +723,7 @@ impl<'r> Parser<'r> {
                     token = self.scanner.peek()?;
                 } else {
                     let token_mark = token.start_mark;
-                    let mark = self.marks.pop().unwrap();
+                    let mark = self.inner.marks.pop().unwrap();
                     return Err(Error::parser(
                         "while parsing a flow sequence",
                         mark,
@@ -722,11 +743,11 @@ impl<'r> Parser<'r> {
                     start_mark: token.start_mark,
                     end_mark: token.end_mark,
                 };
-                self.state = ParserState::FlowSequenceEntryMappingKey;
+                self.inner.state = ParserState::FlowSequenceEntryMappingKey;
                 self.scanner.skip_token();
                 return Ok(event);
             } else if !matches!(token.data, TokenData::FlowSequenceEnd) {
-                self.states.push(ParserState::FlowSequenceEntry);
+                self.inner.states.push(ParserState::FlowSequenceEntry);
                 return self.parse_node(false, false);
             }
         }
@@ -735,8 +756,8 @@ impl<'r> Parser<'r> {
             start_mark: token.start_mark,
             end_mark: token.end_mark,
         };
-        self.state = self.states.pop().unwrap();
-        _ = self.marks.pop();
+        self.inner.state = self.inner.states.pop().unwrap();
+        _ = self.inner.marks.pop();
         self.scanner.skip_token();
         Ok(event)
     }
@@ -749,10 +770,12 @@ impl<'r> Parser<'r> {
         ) {
             let mark: Mark = token.end_mark;
             self.scanner.skip_token();
-            self.state = ParserState::FlowSequenceEntryMappingValue;
+            self.inner.state = ParserState::FlowSequenceEntryMappingValue;
             Self::process_empty_scalar(mark)
         } else {
-            self.states.push(ParserState::FlowSequenceEntryMappingValue);
+            self.inner
+                .states
+                .push(ParserState::FlowSequenceEntryMappingValue);
             self.parse_node(false, false)
         }
     }
@@ -766,12 +789,14 @@ impl<'r> Parser<'r> {
                 token.data,
                 TokenData::FlowEntry | TokenData::FlowSequenceEnd
             ) {
-                self.states.push(ParserState::FlowSequenceEntryMappingEnd);
+                self.inner
+                    .states
+                    .push(ParserState::FlowSequenceEntryMappingEnd);
                 return self.parse_node(false, false);
             }
         }
         let mark = token.start_mark;
-        self.state = ParserState::FlowSequenceEntryMappingEnd;
+        self.inner.state = ParserState::FlowSequenceEntryMappingEnd;
         Self::process_empty_scalar(mark)
     }
 
@@ -779,7 +804,7 @@ impl<'r> Parser<'r> {
         let token = self.scanner.peek()?;
         let start_mark = token.start_mark;
         let end_mark = token.end_mark;
-        self.state = ParserState::FlowSequenceEntry;
+        self.inner.state = ParserState::FlowSequenceEntry;
         Ok(Event {
             data: EventData::MappingEnd,
             start_mark,
@@ -791,7 +816,7 @@ impl<'r> Parser<'r> {
         if first {
             let token = self.scanner.peek()?;
             let mark = token.start_mark;
-            self.marks.push(mark);
+            self.inner.marks.push(mark);
             self.scanner.skip_token();
         }
 
@@ -803,7 +828,7 @@ impl<'r> Parser<'r> {
                     token = self.scanner.peek()?;
                 } else {
                     let token_mark = token.start_mark;
-                    let mark = self.marks.pop().unwrap();
+                    let mark = self.inner.marks.pop().unwrap();
                     return Err(Error::parser(
                         "while parsing a flow mapping",
                         mark,
@@ -819,14 +844,14 @@ impl<'r> Parser<'r> {
                     token.data,
                     TokenData::Value | TokenData::FlowEntry | TokenData::FlowMappingEnd
                 ) {
-                    self.states.push(ParserState::FlowMappingValue);
+                    self.inner.states.push(ParserState::FlowMappingValue);
                     return self.parse_node(false, false);
                 }
                 let mark = token.start_mark;
-                self.state = ParserState::FlowMappingValue;
+                self.inner.state = ParserState::FlowMappingValue;
                 return Self::process_empty_scalar(mark);
             } else if !matches!(token.data, TokenData::FlowMappingEnd) {
-                self.states.push(ParserState::FlowMappingEmptyValue);
+                self.inner.states.push(ParserState::FlowMappingEmptyValue);
                 return self.parse_node(false, false);
             }
         }
@@ -835,8 +860,8 @@ impl<'r> Parser<'r> {
             start_mark: token.start_mark,
             end_mark: token.end_mark,
         };
-        self.state = self.states.pop().unwrap();
-        _ = self.marks.pop();
+        self.inner.state = self.inner.states.pop().unwrap();
+        _ = self.inner.marks.pop();
         self.scanner.skip_token();
         Ok(event)
     }
@@ -845,19 +870,19 @@ impl<'r> Parser<'r> {
         let mut token = self.scanner.peek()?;
         if empty {
             let mark = token.start_mark;
-            self.state = ParserState::FlowMappingKey;
+            self.inner.state = ParserState::FlowMappingKey;
             return Self::process_empty_scalar(mark);
         }
         if let TokenData::Value = token.data {
             self.scanner.skip_token();
             token = self.scanner.peek()?;
             if !matches!(token.data, TokenData::FlowEntry | TokenData::FlowMappingEnd) {
-                self.states.push(ParserState::FlowMappingKey);
+                self.inner.states.push(ParserState::FlowMappingKey);
                 return self.parse_node(false, false);
             }
         }
         let mark = token.start_mark;
-        self.state = ParserState::FlowMappingKey;
+        self.inner.state = ParserState::FlowMappingKey;
         Self::process_empty_scalar(mark)
     }
 
@@ -933,7 +958,8 @@ impl<'r> Parser<'r> {
                     prefix: core::mem::take(prefix),
                 };
                 let mark = token.start_mark;
-                self.append_tag_directive(value.clone(), false, mark)?;
+                self.inner
+                    .append_tag_directive(value.clone(), false, mark)?;
 
                 tag_directives.push(value);
             }
@@ -944,7 +970,8 @@ impl<'r> Parser<'r> {
 
         let start_mark = token.start_mark;
         for default_tag_directive in default_tag_directives {
-            self.append_tag_directive(default_tag_directive, true, start_mark)?;
+            self.inner
+                .append_tag_directive(default_tag_directive, true, start_mark)?;
         }
 
         if let Some(version_directive_ref) = version_directive_ref {
@@ -963,7 +990,9 @@ impl<'r> Parser<'r> {
 
         Ok(())
     }
+}
 
+impl ParserInner {
     fn append_tag_directive(
         &mut self,
         value: TagDirective,

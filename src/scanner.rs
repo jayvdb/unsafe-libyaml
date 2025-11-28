@@ -1,9 +1,10 @@
 use std::collections::VecDeque;
+use std::io::BufRead;
 
 use crate::macros::{is_blankz, is_break};
 use crate::reader::yaml_parser_update_buffer;
 use crate::{
-    Encoding, Error, Mark, Result, ScalarStyle, SimpleKey, Token, TokenData, INPUT_BUFFER_SIZE,
+    Encoding, Error, INPUT_BUFFER_SIZE, Mark, Result, ScalarStyle, SimpleKey, Token, TokenData,
 };
 
 const MAX_NUMBER_LENGTH: u64 = 9_u64;
@@ -12,9 +13,9 @@ const MAX_NUMBER_LENGTH: u64 = 9_u64;
 ///
 /// This is used internally by the parser, and may also be used standalone as a
 /// replacement for the libyaml `yaml_parser_scan()` function.
-pub struct Scanner<'r> {
+pub struct Scanner<R> {
     /// Read handler.
-    pub(crate) read_handler: Option<&'r mut dyn std::io::BufRead>,
+    pub(crate) read_handler: Option<R>,
     /// EOF flag
     pub(crate) eof: bool,
     /// The working buffer.
@@ -49,8 +50,16 @@ pub struct Scanner<'r> {
     pub(crate) simple_keys: Vec<SimpleKey>,
 }
 
-impl<'r> Scanner<'r> {
-    pub fn new() -> Scanner<'r> {
+impl<'r, 'b> Scanner<&'r mut &'b [u8]> {
+    /// Set a string input.
+    pub fn set_input_string(&mut self, input: &'r mut &'b [u8]) {
+        assert!((self.read_handler).is_none());
+        self.read_handler = Some(input);
+    }
+}
+
+impl<R> Scanner<R> {
+    pub fn new() -> Scanner<R> {
         Self {
             read_handler: None,
             eof: false,
@@ -71,14 +80,8 @@ impl<'r> Scanner<'r> {
         }
     }
 
-    /// Set a string input.
-    pub fn set_input_string(&mut self, input: &'r mut &[u8]) {
-        assert!((self.read_handler).is_none());
-        self.read_handler = Some(input);
-    }
-
     /// Set a generic input handler.
-    pub fn set_input(&mut self, input: &'r mut dyn std::io::BufRead) {
+    pub fn set_input(&mut self, input: R) {
         assert!((self.read_handler).is_none());
         self.read_handler = Some(input);
     }
@@ -89,6 +92,28 @@ impl<'r> Scanner<'r> {
         self.encoding = encoding;
     }
 
+    /// Reset the scanner, preserving internal allocations.
+    pub fn reset(&mut self) {
+        self.read_handler = None;
+        self.eof = false;
+        self.buffer.clear();
+        self.encoding = Encoding::Any;
+        self.offset = 0;
+        self.mark = Mark::default();
+        self.stream_start_produced = false;
+        self.stream_end_produced = false;
+        self.flow_level = 0;
+        self.tokens.clear();
+        self.tokens_parsed = 0;
+        self.token_available = false;
+        self.indents.clear();
+        self.indent = 0;
+        self.simple_key_allowed = false;
+        self.simple_keys.clear();
+    }
+}
+
+impl<R: BufRead> Scanner<R> {
     fn cache(&mut self, length: usize) -> Result<()> {
         if self.buffer.len() >= length {
             Ok(())
@@ -1824,13 +1849,13 @@ impl<'r> Scanner<'r> {
     }
 }
 
-impl Default for Scanner<'_> {
+impl<R> Default for Scanner<R> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Iterator for Scanner<'_> {
+impl<R: BufRead> Iterator for Scanner<R> {
     type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -1842,4 +1867,4 @@ impl Iterator for Scanner<'_> {
     }
 }
 
-impl core::iter::FusedIterator for Scanner<'_> {}
+impl<R: BufRead> core::iter::FusedIterator for Scanner<R> {}

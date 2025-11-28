@@ -1,7 +1,9 @@
+use std::io::BufRead;
+
 use crate::{
     AliasData, Anchors, DEFAULT_MAPPING_TAG, DEFAULT_SCALAR_TAG, DEFAULT_SEQUENCE_TAG, Emitter,
-    Error, Event, EventData, MappingStyle, Mark, Parser, Result, ScalarStyle, SequenceStyle,
-    TagDirective, VersionDirective,
+    Error, Event, EventData, MappingStyle, Mark, Parser, ParserInner, Result, ScalarStyle,
+    SequenceStyle, TagDirective, VersionDirective,
 };
 
 /// The document structure.
@@ -246,7 +248,7 @@ impl Document {
     ///
     /// An application must not alternate the calls of [`Document::load()`] with
     /// the calls of [`Parser::parse()`]. Doing this will break the parser.
-    pub fn load(parser: &mut Parser) -> Result<Document> {
+    pub fn load<R: BufRead>(parser: &mut Parser<R>) -> Result<Document> {
         let mut document = Document::new(None, &[], false, false);
         document.nodes.reserve(16);
 
@@ -258,7 +260,7 @@ impl Document {
                 }) => (),
                 Ok(_) => panic!("expected stream start"),
                 Err(err) => {
-                    parser.delete_aliases();
+                    parser.inner.delete_aliases();
                     return Err(err);
                 }
             }
@@ -272,10 +274,10 @@ impl Document {
                 if let EventData::StreamEnd = &event.data {
                     return Ok(document);
                 }
-                parser.aliases.reserve(16);
+                parser.inner.aliases.reserve(16);
                 match document.load_document(parser, event) {
                     Ok(()) => {
-                        parser.delete_aliases();
+                        parser.inner.delete_aliases();
                         return Ok(document);
                     }
                     Err(e) => err = e,
@@ -283,11 +285,11 @@ impl Document {
             }
             Err(e) => err = e,
         }
-        parser.delete_aliases();
+        parser.inner.delete_aliases();
         Err(err)
     }
 
-    fn load_document(&mut self, parser: &mut Parser, event: Event) -> Result<()> {
+    fn load_document<R: BufRead>(&mut self, parser: &mut Parser<R>, event: Event) -> Result<()> {
         let mut ctx = vec![];
         if let EventData::DocumentStart {
             version_directive,
@@ -311,7 +313,7 @@ impl Document {
         }
     }
 
-    fn load_nodes(&mut self, parser: &mut Parser, ctx: &mut Vec<i32>) -> Result<()> {
+    fn load_nodes<R: BufRead>(&mut self, parser: &mut Parser<R>, ctx: &mut Vec<i32>) -> Result<()> {
         let end_implicit;
         let end_mark;
 
@@ -327,19 +329,19 @@ impl Document {
                     break;
                 }
                 EventData::Alias { .. } => {
-                    self.load_alias(parser, event, ctx)?;
+                    self.load_alias(&parser.inner, event, ctx)?;
                 }
                 EventData::Scalar { .. } => {
-                    self.load_scalar(parser, event, ctx)?;
+                    self.load_scalar(&mut parser.inner, event, ctx)?;
                 }
                 EventData::SequenceStart { .. } => {
-                    self.load_sequence(parser, event, ctx)?;
+                    self.load_sequence(&mut parser.inner, event, ctx)?;
                 }
                 EventData::SequenceEnd => {
                     self.load_sequence_end(event, ctx)?;
                 }
                 EventData::MappingStart { .. } => {
-                    self.load_mapping(parser, event, ctx)?;
+                    self.load_mapping(&mut parser.inner, event, ctx)?;
                 }
                 EventData::MappingEnd => {
                     self.load_mapping_end(event, ctx)?;
@@ -353,7 +355,7 @@ impl Document {
 
     fn register_anchor(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut ParserInner,
         index: i32,
         anchor: Option<String>,
     ) -> Result<()> {
@@ -407,7 +409,7 @@ impl Document {
         Ok(())
     }
 
-    fn load_alias(&mut self, parser: &mut Parser, event: Event, ctx: &[i32]) -> Result<()> {
+    fn load_alias(&mut self, parser: &ParserInner, event: Event, ctx: &[i32]) -> Result<()> {
         let EventData::Alias { anchor } = &event.data else {
             unreachable!()
         };
@@ -426,7 +428,7 @@ impl Document {
         ))
     }
 
-    fn load_scalar(&mut self, parser: &mut Parser, event: Event, ctx: &[i32]) -> Result<()> {
+    fn load_scalar(&mut self, parser: &mut ParserInner, event: Event, ctx: &[i32]) -> Result<()> {
         let EventData::Scalar {
             mut tag,
             value,
@@ -455,7 +457,7 @@ impl Document {
 
     fn load_sequence(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut ParserInner,
         event: Event,
         ctx: &mut Vec<i32>,
     ) -> Result<()> {
@@ -508,7 +510,7 @@ impl Document {
 
     fn load_mapping(
         &mut self,
-        parser: &mut Parser,
+        parser: &mut ParserInner,
         event: Event,
         ctx: &mut Vec<i32>,
     ) -> Result<()> {
