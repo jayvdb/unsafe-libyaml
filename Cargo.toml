@@ -12,7 +12,7 @@ repository = "https://github.com/simonask/libyaml-safer"
 rust-version = "1.64"
 
 [dev-dependencies]
-# To test on 1.64, comment out `criterion`.
+# To test on 1.64,1.75,etc, comment out `criterion`.
 criterion = "0.5.1"
 pretty_assertions = "1.0"
 unsafe-libyaml = "0.2.10"
